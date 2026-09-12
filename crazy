@@ -1,0 +1,132 @@
+    task.wait(0.2)
+    RefreshViewPlayerList()
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    if ViewingPlayer == player then
+        StopViewingPlayer()
+        Library:Notify("View Player: Target left the game, camera reset.")
+    end
+    task.wait(0.2)
+    RefreshViewPlayerList()
+end)
+
+ViewPlayerGroup:AddButton({ Text = "View Target", Func = function()
+    local rawSelected = Options.ViewPlayerDropdown.Value
+    local selectedName = GetUsernameFromEntry(rawSelected)
+    if not selectedName then
+        Library:Notify("Please select a valid player!")
+        return
+    end
+
+    local targetPlayer = Players:FindFirstChild(selectedName)
+    if targetPlayer then
+        ViewingPlayer = targetPlayer
+        if ViewPlayerConnection then ViewPlayerConnection:Disconnect() end
+
+        ViewPlayerConnection = RunService.RenderStepped:Connect(function()
+            if ViewingPlayer and ViewingPlayer.Parent then
+                local char = ViewingPlayer.Character
+                if char then
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    if hum then
+                        Camera.CameraSubject = hum
+                    end
+                end
+            else
+                StopViewingPlayer()
+                Library:Notify("View Player: Target left the game.")
+            end
+        end)
+        Library:Notify("Now viewing: " .. targetPlayer.DisplayName)
+    else
+        Library:Notify("Player not found!")
+    end
+end })
+
+ViewPlayerGroup:AddButton({ Text = "Unview Target", Func = function()
+    StopViewingPlayer()
+    Library:Notify("Stopped viewing player.")
+end })
+
+ViewPlayerGroup:AddButton({ Text = "Go to Player", Func = function()
+    local rawSelected = Options.ViewPlayerDropdown.Value
+    local selectedName = GetUsernameFromEntry(rawSelected)
+    if not selectedName then
+        Library:Notify("Please select a valid player!")
+        return
+    end
+
+    local targetPlayer = Players:FindFirstChild(selectedName)
+    if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if myRoot then
+            myRoot.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
+            Library:Notify("Teleported to: " .. targetPlayer.DisplayName)
+        else
+            Library:Notify("Your character root part not found!")
+        end
+    else
+        Library:Notify("Target character not found or dead!")
+    end
+end })
+
+local InterfaceGroup = Tabs.UI:AddLeftGroupbox("Font menu")
+local MenuGroup = Tabs.UI:AddLeftGroupbox("Menu Settings")
+
+InterfaceGroup:AddDropdown("UIFontDropdown", { Text = "Font", Values = RobloxFontsList, Default = table.find(RobloxFontsList, "Cartoon") or 1, Multi = false })
+
+Options.UIFontDropdown:OnChanged(function(val)
+    pcall(function()
+        local selectedFontName = type(val) == "string" and val or Options.UIFontDropdown.Value
+        local targetFont = Enum.Font[selectedFontName]
+        if not targetFont then return end
+        GlobalFontSetting = targetFont
+        TargetBtn.Font = targetFont
+        
+        local parentGui = Library.ScreenGui or Library.Main
+        if not parentGui then
+            parentGui = CoreGui:FindFirstChild("Linoria") or CoreGui:FindFirstChild("ScreenGui")
+        end
+        
+        if parentGui then
+            for _, desc in ipairs(parentGui:GetDescendants()) do
+                if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then 
+                    desc.Font = targetFont 
+                end
+            end
+        end
+    end)
+end)
+
+MenuGroup:AddToggle("KeybindMenuOpen", { Default = false, Text = "Open Keybind Menu", Callback = function(value) Library.KeybindFrame.Visible = value end})
+MenuGroup:AddToggle("ShowCustomCursor", {Text = "Custom Cursor", Default = true, Callback = function(Value) Library.ShowCustomCursor = Value end})
+MenuGroup:AddDivider()
+MenuGroup:AddLabel("Menu bind"):AddKeyPicker("MenuKeybind", { Default = "RightShift", NoUI = true, Text = "Menu keybind" })
+MenuGroup:AddButton("Unload", function() Library:Unload() end)
+
+Library.ToggleKeybind = Options.MenuKeybind
+
+Library.OnUnload(function()
+    StopViewingPlayer()
+    for player, _ in pairs(ESP_Drawing_Storage) do
+        RemoveDrawingESP(player)
+    end
+    table.clear(ESP_Drawing_Storage)
+    if LockButtonGui then LockButtonGui:Destroy() end
+    if BoxFillGui then BoxFillGui:Destroy() end
+    if SelfHighlightInstance then SelfHighlightInstance:Destroy() end
+    if FOVCircleOutline then FOVCircleOutline:Remove() end
+    if FOVCircle then FOVCircle:Remove() end
+    
+    Library.Unloaded = true
+end)
+
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+SaveManager:IgnoreThemeSettings()
+ThemeManager:SetFolder("Resolution")
+SaveManager:SetFolder("Resolution/configs")
+SaveManager:BuildConfigSection(Tabs.UI)
+ThemeManager:ApplyToTab(Tabs.UI)
+SaveManager:LoadAutoloadConfig()
